@@ -33,6 +33,10 @@ void fe::FileExplorer::getEntries()
 {
     struct dirent* entry;
 
+    this->_dir = opendir(this->_dirPath.c_str());
+    if (!this->_dir)
+        throw std::runtime_error("Couldn't open directory");
+    this->_entries.clear();
     while ((entry = readdir(this->_dir)) != nullptr) {
         std::string entryName = std::string(entry->d_name);
         if (entryName == "." || entryName == "..")
@@ -44,14 +48,10 @@ void fe::FileExplorer::getEntries()
 std::ifstream fe::FileExplorer::open()
 {
     std::ifstream res;
-    this->_dirPath = std::getenv("PWD");
 
-    // Open Directory from environment
+    this->_dirPath = std::getenv("PWD");
     if (this->_dirPath.empty())
         throw std::runtime_error("'PWD' isn't set in the environment");
-    this->_dir = opendir(this->_dirPath.c_str());
-    if (!this->_dir)
-        throw std::runtime_error("Couldn't open 'PWD' directory");
     this->getEntries();
 
     // Main Loop
@@ -70,8 +70,12 @@ std::ifstream fe::FileExplorer::open()
                         if (!this->_entries[i]->isDirectory()) {
                             res.open(this->_dirPath + "/" + this->_entries[i]->getFileName());
                             this->_window->close();
-                            break;
+                        } else {
+                            closedir(this->_dir);
+                            this->_dirPath += "/" + this->_entries[i]->getFileName();
+                            this->getEntries();
                         }
+                        break;
                     }
                 }
             }
