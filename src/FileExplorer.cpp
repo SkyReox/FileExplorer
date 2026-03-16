@@ -63,13 +63,14 @@ void fe::FileExplorer::getEntries()
     this->_fileBarOffset = 0.f;
     this->_entries.clear();
     this->_pwdButtons.clear();
+    sf::Vector2f fileBarSize(this->_window->getSize().x, TEXT_SIZE + FILE_SEP_SIZE * 0.8);
     while ((entry = readdir(this->_dir)) != nullptr) {
         std::string entryName = std::string(entry->d_name);
         if (entryName == "." || entryName == "..")
             continue;
-        if (entryName[0] == '.')
+        if (entryName[0] == '.' && !this->_showHidden)
             continue;
-        this->_entries.push_back(std::make_unique<fe::FileBar>(entry, *this->_font));
+        this->_entries.push_back(std::make_unique<fe::FileBar>(entry, *this->_font, fileBarSize));
     }
     if (this->_dirPath.rfind(home, 0) == std::string::npos)
         return;

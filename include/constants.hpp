@@ -11,7 +11,7 @@
     #define SUCCESS 0
     #define FAILURE 84
 
-    #define MOUSE_WHEEL_SENSITIVITY 3
+    #define MOUSE_WHEEL_SENSITIVITY 7
 
     #define FONT_PATH "resources/Arial Regular.ttf"
     #define TEXT_SIZE 20
