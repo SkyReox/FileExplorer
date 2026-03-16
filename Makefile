@@ -5,8 +5,11 @@
 ## Makefile
 ##
 
-SRC =	src/FileExplorer.cpp	\
-		src/FileBar.cpp			\
+SRC =	src/FileExplorer.cpp			\
+		src/FileBar.cpp					\
+		src/RoundedRectangleShape.cpp	\
+		src/Button.cpp					\
+		src/DirButton.cpp				\
 
 MAIN =	src/main.cpp
 

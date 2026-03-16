@@ -24,7 +24,7 @@ int main(void)
         return FAILURE;
     }
 
-    fe::FileExplorer fileExplorer("Test");
+    fe::FileExplorer fileExplorer("Open File");
     std::ifstream file;
 
     try

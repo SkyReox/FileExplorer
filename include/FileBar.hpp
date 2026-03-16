@@ -8,6 +8,8 @@
 #ifndef FILEBAR_HPP_
     #define FILEBAR_HPP_
 
+#include "Button.hpp"
+#include "constants.hpp"
 #include <dirent.h>
 #include <memory>
 #include <string>
@@ -15,13 +17,12 @@
 #include <SFML/Window.hpp>
 
 namespace fe {
-    class FileBar {
+    class FileBar : public Button {
         struct dirent* _file;
-        std::unique_ptr<sf::RectangleShape> _rect;
-        bool _hover = false;
+        std::unique_ptr<sf::Text> _text;
 
         public:
-            FileBar(struct dirent* file);
+            FileBar(struct dirent* file, sf::Font& font, sf::Vector2f size = sf::Vector2f(sf::VideoMode::getDesktopMode().width, TEXT_SIZE + FILE_SEP_SIZE * 0.8));
 
             ~FileBar() = default;
             FileBar(const FileBar&) = delete;
@@ -29,10 +30,9 @@ namespace fe {
             FileBar(FileBar&&) noexcept = default;
             FileBar& operator=(FileBar&&) noexcept = default;
 
-            void draw(sf::Vector2f pos, sf::Text& text, sf::RenderWindow& window);
+            void draw(sf::Vector2f pos, sf::RenderWindow& window) final;
             bool isDirectory() const;
             std::string getFileName() const noexcept;
-            bool getHover() const noexcept;
     };
 }
 

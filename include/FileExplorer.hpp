@@ -8,14 +8,11 @@
 #ifndef FILE_EXPLORER_HPP_
     #define FILE_EXPLORER_HPP_
 
-    #define SUCCESS 0
-    #define FAILURE 84
-
-    #define FONT_PATH "resources/Arial Regular.ttf"
-    #define TEXT_SIZE 20
-    #define FILE_SEP_SIZE 15
-
+#include "Button.hpp"
+#include "constants.hpp"
+#include "DirButton.hpp"
 #include "FileBar.hpp"
+#include "RoundedRectangleShape.hpp"
 #include <dirent.h>
 #include <fstream>
 #include <memory>
@@ -41,8 +38,15 @@ namespace fe
         std::vector<std::unique_ptr<fe::FileBar>> _entries;
         std::string _selectedFile;
 
+        std::unique_ptr<sf::RectangleShape> _pwdRect;
+        std::unique_ptr<RoundedRectangleShape> _pwdBarRect;
+        std::vector<std::unique_ptr<DirButton>> _pwdButtons;
+
         void init();
         void getEntries();
+        bool handleEvents(std::ifstream& res);
+        void update();
+        void display();
 
         public:
             FileExplorer(std::string windowName);

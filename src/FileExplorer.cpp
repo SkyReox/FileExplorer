@@ -5,11 +5,14 @@
 ** FileExplorer.cpp
 */
 
+#include "Button.hpp"
 #include "FileBar.hpp"
 #include "FileExplorer.hpp"
+#include <algorithm>
 #include <dirent.h>
 #include <exception>
 #include <iostream>
+#include <string>
 #include <vector>
 
 fe::FileExplorer::FileExplorer(std::string windowName) : _windowName(windowName)
@@ -26,70 +29,143 @@ fe::FileExplorer::FileExplorer(std::string windowName) : _windowName(windowName)
 
 void fe::FileExplorer::init()
 {
+    this->_dirPath = std::getenv("PWD");
+    if (this->_dirPath.empty())
+        throw std::runtime_error("'PWD' isn't set in the environment");
+
     this->_window = std::make_unique<sf::RenderWindow>(sf::VideoMode(800, 600, 32), this->_windowName, sf::Style::Titlebar | sf::Style::Close);
+
+    this->_pwdRect = std::make_unique<sf::RectangleShape>(sf::Vector2f(this->_window->getSize().x, 50.));
+    this->_pwdRect->setPosition(sf::Vector2f(0, 0));
+    this->_pwdRect->setFillColor(this->_bgColor);
+    this->_pwdRect->setOutlineColor(sf::Color(80, 80, 80));
+    this->_pwdRect->setOutlineThickness(1);
+
+    this->_pwdBarRect = std::make_unique<RoundedRectangleShape>(sf::Vector2f(this->_window->getSize().x - PWD_OFFSET * 2, 40), 10., 8);
+    this->_pwdBarRect->setFillColor(sf::Color(80, 80, 80));
+    this->_pwdBarRect->setPosition(sf::Vector2f(PWD_OFFSET, 5));
+
+    this->getEntries();
 }
 
 void fe::FileExplorer::getEntries()
 {
     struct dirent* entry;
+    std::string home;
+
+    home = std::getenv("HOME");
+    if (home.empty())
+        throw std::runtime_error("'HOME' isn't set in the environment");
 
     this->_dir = opendir(this->_dirPath.c_str());
     if (!this->_dir)
         throw std::runtime_error("Couldn't open directory");
     this->_entries.clear();
+    this->_pwdButtons.clear();
     while ((entry = readdir(this->_dir)) != nullptr) {
         std::string entryName = std::string(entry->d_name);
         if (entryName == "." || entryName == "..")
             continue;
-        this->_entries.push_back(std::make_unique<fe::FileBar>(entry));
+        if (entryName[0] == '.')
+            continue;
+        this->_entries.push_back(std::make_unique<fe::FileBar>(entry, *this->_font));
     }
+    if (this->_dirPath.rfind(home, 0) == std::string::npos)
+        return;
+    sf::Vector2f pwdButtonPos(75, this->_pwdBarRect->getGlobalBounds().getSize().y - 10);
+    this->_pwdButtons.push_back(std::make_unique<DirButton>(home, *this->_font, pwdButtonPos));
+
+    std::string dir = home;
+    auto nDirs = std::count(this->_dirPath.begin(), this->_dirPath.end(), '/');
+    for (std::size_t i = 2; i < nDirs; i++) {
+        pwdButtonPos.x += this->_pwdButtons[this->_pwdButtons.size() - 1]->getGlobalX() + 10;
+
+        std::string nextDirs = std::string(&this->_dirPath[dir.size() + 1]);
+        auto slashPos = nextDirs.find('/');
+        if (slashPos <= nextDirs.size())
+            dir = this->_dirPath.substr(0, dir.size() + slashPos + 1);
+        else
+            dir = this->_dirPath;
+
+        this->_pwdButtons.push_back(std::make_unique<DirButton>(dir, *this->_font, pwdButtonPos));
+    }
+}
+
+bool fe::FileExplorer::handleEvents(std::ifstream& res)
+{
+    sf::Event event;
+    while (this->_window->pollEvent(event)) {
+        if (event.type == sf::Event::Closed) {
+            this->_window->close();
+            return true;
+        }
+
+        if (event.type == sf::Event::MouseButtonPressed)
+            if (event.mouseButton.button == sf::Mouse::Left) {
+                for (std::size_t i = 0; i < this->_entries.size(); i++)
+                    if (this->_entries[i]->getHover()) {
+                        if (!this->_entries[i]->isDirectory()) {
+                            res.open(this->_dirPath + "/" + this->_entries[i]->getFileName());
+                            this->_window->close();
+                            return true;
+                        } else {
+                            closedir(this->_dir);
+                            this->_dirPath += "/" + this->_entries[i]->getFileName();
+                            this->getEntries();
+                            return false;
+                        }
+                    }
+                for (std::size_t i = 0; i < this->_pwdButtons.size(); i++) {
+                    if (this->_pwdButtons[i]->getHover()) {
+                        closedir(this->_dir);
+                        this->_dirPath = this->_pwdButtons[i]->getDirPath();
+                        this->getEntries();
+                        return false;
+                    }
+                }
+            }
+    }
+    return false;
+}
+
+void fe::FileExplorer::display()
+{
+    this->_window->clear(this->_bgColor);
+    this->_window->draw(*this->_pwdRect);
+    this->_window->draw(*this->_pwdBarRect);
+
+    float pwdRectY = this->_pwdRect->getSize().y;
+    for (std::size_t i = 0; i < this->_entries.size(); i++)
+        this->_entries[i]->draw(sf::Vector2f(0, FILE_SEP_SIZE / 2 + i * (TEXT_SIZE + FILE_SEP_SIZE) + pwdRectY), *this->_window);
+    float pwdOffset = PWD_OFFSET + 10;
+    for (std::size_t i = 0; i < this->_pwdButtons.size(); i++) {
+        this->_pwdButtons[i]->draw(sf::Vector2f(pwdOffset, this->_pwdBarRect->getPosition().y + 5), *this->_window);
+        pwdOffset += this->_pwdButtons[i]->getGlobalX() + 10;
+    }
+
+    this->_window->display();
+}
+
+void fe::FileExplorer::update()
+{
+    for (size_t i = 0; i < this->_entries.size(); i++)
+        this->_entries[i]->update(*this->_window);
+    for (size_t i = 0; i < this->_pwdButtons.size(); i++)
+        this->_pwdButtons[i]->update(*this->_window);
 }
 
 std::ifstream fe::FileExplorer::open()
 {
     std::ifstream res;
-
-    this->_dirPath = std::getenv("PWD");
-    if (this->_dirPath.empty())
-        throw std::runtime_error("'PWD' isn't set in the environment");
-    this->getEntries();
-
-    // Main Loop
     this->init();
+
     while (this->_window->isOpen()) {
-        // Events
-        sf::Event event;
-        while (this->_window->pollEvent(event)) {
-            if (event.type == sf::Event::Closed) {
-                this->_window->close();
-                continue;
-            }
-            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                for (std::size_t i = 0; i < this->_entries.size(); i++) {
-                    if (this->_entries[i]->getHover()) {
-                        if (!this->_entries[i]->isDirectory()) {
-                            res.open(this->_dirPath + "/" + this->_entries[i]->getFileName());
-                            this->_window->close();
-                        } else {
-                            closedir(this->_dir);
-                            this->_dirPath += "/" + this->_entries[i]->getFileName();
-                            this->getEntries();
-                        }
-                        break;
-                    }
-                }
-            }
-        }
+        if (this->handleEvents(res))
+            break;
 
-        // Show
-        this->_window->clear(this->_bgColor);
+        this->update();
 
-        for (std::size_t i = 0; i < this->_entries.size(); i++) {
-            this->_text->setPosition(sf::Vector2f(10, 10 + i * (TEXT_SIZE + FILE_SEP_SIZE)));
-            this->_entries[i]->draw(sf::Vector2f(0, FILE_SEP_SIZE / 2 + i * (TEXT_SIZE + FILE_SEP_SIZE)), *this->_text, *this->_window);
-        }
-
-        this->_window->display();
+        this->display();
     }
 
     closedir(this->_dir);
