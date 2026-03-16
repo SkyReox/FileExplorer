@@ -25,6 +25,7 @@ namespace fe {
             DirButton(DirButton&&) noexcept = default;
             DirButton& operator=(DirButton&&) noexcept = default;
 
+            void update(sf::RenderWindow& window) final;
             void draw(sf::Vector2f pos, sf::RenderWindow& window) final;
             std::string getDirPath() const noexcept;
             float getGlobalX() const noexcept;

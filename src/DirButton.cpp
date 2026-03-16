@@ -31,6 +31,25 @@ float fe::DirButton::getGlobalX() const noexcept
     return this->_rect->getGlobalBounds().getSize().x;
 }
 
+void fe::DirButton::update(sf::RenderWindow& window)
+{
+    sf::Vector2i mousePixel = sf::Mouse::getPosition(window);
+    sf::Vector2f mouseWorld = window.mapPixelToCoords(mousePixel);
+
+    if (mouseWorld.y >= PWD_RECT_SIZE_Y) {
+        this->_hover = false;
+        this->_rect->setFillColor(this->_color);
+        return;
+    }
+    if (this->_rect->getGlobalBounds().contains(mouseWorld)) {
+        this->_hover = true;
+        this->_rect->setFillColor(this->_hoverColor);
+    } else {
+        this->_hover = false;
+        this->_rect->setFillColor(this->_color);
+    }
+}
+
 void fe::DirButton::draw(sf::Vector2f pos, sf::RenderWindow& window)
 {
     this->_rect->setPosition(pos);

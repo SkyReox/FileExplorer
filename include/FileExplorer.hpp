@@ -36,7 +36,7 @@ namespace fe
         std::string _dirPath;
         DIR* _dir;
         std::vector<std::unique_ptr<fe::FileBar>> _entries;
-        std::string _selectedFile;
+        float _fileBarOffset = 0.f;
 
         std::unique_ptr<sf::RectangleShape> _pwdRect;
         std::unique_ptr<RoundedRectangleShape> _pwdBarRect;

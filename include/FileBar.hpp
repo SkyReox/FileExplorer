@@ -30,6 +30,7 @@ namespace fe {
             FileBar(FileBar&&) noexcept = default;
             FileBar& operator=(FileBar&&) noexcept = default;
 
+            void update(sf::RenderWindow& window) final;
             void draw(sf::Vector2f pos, sf::RenderWindow& window) final;
             bool isDirectory() const;
             std::string getFileName() const noexcept;

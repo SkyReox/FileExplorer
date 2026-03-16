@@ -35,7 +35,7 @@ void fe::FileExplorer::init()
 
     this->_window = std::make_unique<sf::RenderWindow>(sf::VideoMode(800, 600, 32), this->_windowName, sf::Style::Titlebar | sf::Style::Close);
 
-    this->_pwdRect = std::make_unique<sf::RectangleShape>(sf::Vector2f(this->_window->getSize().x, 50.));
+    this->_pwdRect = std::make_unique<sf::RectangleShape>(sf::Vector2f(this->_window->getSize().x, PWD_RECT_SIZE_Y));
     this->_pwdRect->setPosition(sf::Vector2f(0, 0));
     this->_pwdRect->setFillColor(this->_bgColor);
     this->_pwdRect->setOutlineColor(sf::Color(80, 80, 80));
@@ -60,6 +60,7 @@ void fe::FileExplorer::getEntries()
     this->_dir = opendir(this->_dirPath.c_str());
     if (!this->_dir)
         throw std::runtime_error("Couldn't open directory");
+    this->_fileBarOffset = 0.f;
     this->_entries.clear();
     this->_pwdButtons.clear();
     while ((entry = readdir(this->_dir)) != nullptr) {
@@ -95,11 +96,13 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
 {
     sf::Event event;
     while (this->_window->pollEvent(event)) {
+        // Close Event
         if (event.type == sf::Event::Closed) {
             this->_window->close();
             return true;
         }
 
+        // Mouse Button
         if (event.type == sf::Event::MouseButtonPressed)
             if (event.mouseButton.button == sf::Mouse::Left) {
                 for (std::size_t i = 0; i < this->_entries.size(); i++)
@@ -124,6 +127,16 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
                     }
                 }
             }
+
+        // Mouse Wheel
+        if (event.type == sf::Event::MouseWheelMoved) {
+            this->_fileBarOffset += event.mouseWheel.delta * MOUSE_WHEEL_SENSITIVITY;
+            if (this->_fileBarOffset > 0)
+                this->_fileBarOffset = 0;
+            long maxFileBarOffset = (FILE_SEP_SIZE / 2 + (this->_entries.size() - 1) * (TEXT_SIZE + FILE_SEP_SIZE)) * -1;
+            if (this->_fileBarOffset <= maxFileBarOffset)
+                this->_fileBarOffset = maxFileBarOffset;
+        }
     }
     return false;
 }
@@ -131,15 +144,15 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
 void fe::FileExplorer::display()
 {
     this->_window->clear(this->_bgColor);
-    this->_window->draw(*this->_pwdRect);
-    this->_window->draw(*this->_pwdBarRect);
 
-    // PWD Bar
+    // File Bars
     float pwdRectY = this->_pwdRect->getSize().y;
     for (std::size_t i = 0; i < this->_entries.size(); i++)
-        this->_entries[i]->draw(sf::Vector2f(0, FILE_SEP_SIZE / 2 + i * (TEXT_SIZE + FILE_SEP_SIZE) + pwdRectY), *this->_window);
+        this->_entries[i]->draw(sf::Vector2f(0, FILE_SEP_SIZE / 2 + i * (TEXT_SIZE + FILE_SEP_SIZE) + pwdRectY + this->_fileBarOffset), *this->_window);
 
-    // PWD Buttons
+    // PWD Bar
+    this->_window->draw(*this->_pwdRect);
+    this->_window->draw(*this->_pwdBarRect);
     this->_text->setString("/");
     float pwdButtonY = (this->_pwdBarRect->getGlobalBounds().getSize().y - this->_text->getGlobalBounds().getSize().y) / 2;
     float pwdOffset = PWD_OFFSET + 10;
