@@ -134,13 +134,22 @@ void fe::FileExplorer::display()
     this->_window->draw(*this->_pwdRect);
     this->_window->draw(*this->_pwdBarRect);
 
+    // PWD Bar
     float pwdRectY = this->_pwdRect->getSize().y;
     for (std::size_t i = 0; i < this->_entries.size(); i++)
         this->_entries[i]->draw(sf::Vector2f(0, FILE_SEP_SIZE / 2 + i * (TEXT_SIZE + FILE_SEP_SIZE) + pwdRectY), *this->_window);
+
+    // PWD Buttons
+    this->_text->setString("/");
+    float pwdButtonY = (this->_pwdBarRect->getGlobalBounds().getSize().y - this->_text->getGlobalBounds().getSize().y) / 2;
     float pwdOffset = PWD_OFFSET + 10;
     for (std::size_t i = 0; i < this->_pwdButtons.size(); i++) {
         this->_pwdButtons[i]->draw(sf::Vector2f(pwdOffset, this->_pwdBarRect->getPosition().y + 5), *this->_window);
-        pwdOffset += this->_pwdButtons[i]->getGlobalX() + 10;
+        pwdOffset += this->_pwdButtons[i]->getGlobalX() + PWD_BUTTON_SEP;
+        if (i != this->_pwdButtons.size() - 1) {
+            this->_text->setPosition(sf::Vector2f(pwdOffset - (PWD_BUTTON_SEP + this->_text->getGlobalBounds().getSize().x) / 2, pwdButtonY));
+            this->_window->draw(*this->_text);
+        }
     }
 
     this->_window->display();
