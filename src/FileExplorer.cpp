@@ -29,11 +29,13 @@ fe::FileExplorer::FileExplorer(std::string windowName) : _windowName(windowName)
 
 void fe::FileExplorer::init()
 {
-    this->_dirPath = std::getenv("PWD");
-    if (this->_dirPath.empty())
+    const char* pwd = std::getenv("PWD");
+    if (!pwd)
         throw std::runtime_error("'PWD' isn't set in the environment");
+    this->_dirPath = pwd;
 
     this->_window = std::make_unique<sf::RenderWindow>(sf::VideoMode(800, 600, 32), this->_windowName, sf::Style::Titlebar | sf::Style::Close);
+    this->_window->setFramerateLimit(FPS);
 
     this->_pwdRect = std::make_unique<sf::RectangleShape>(sf::Vector2f(this->_window->getSize().x, PWD_RECT_SIZE_Y));
     this->_pwdRect->setPosition(sf::Vector2f(0, 0));
@@ -52,11 +54,11 @@ void fe::FileExplorer::init()
 void fe::FileExplorer::getEntries()
 {
     struct dirent* entry;
-    std::string home;
+    const char *homeEnv = std::getenv("HOME");
 
-    home = std::getenv("HOME");
-    if (home.empty())
+    if (!homeEnv)
         throw std::runtime_error("'HOME' isn't set in the environment");
+    std::string home = homeEnv;
 
     this->_dir = opendir(this->_dirPath.c_str());
     if (!this->_dir)
@@ -137,13 +139,23 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
             }
 
         // Mouse Wheel
-        if (event.type == sf::Event::MouseWheelMoved) {
-            this->_fileBarOffset += event.mouseWheel.delta * MOUSE_WHEEL_SENSITIVITY;
-            if (this->_fileBarOffset > 0)
-                this->_fileBarOffset = 0;
-            long maxFileBarOffset = (FILE_SEP_SIZE / 2 + (this->_entries.size() - 1) * (TEXT_SIZE + FILE_SEP_SIZE)) * -1;
-            if (this->_fileBarOffset <= maxFileBarOffset)
-                this->_fileBarOffset = maxFileBarOffset;
+        if (event.type == sf::Event::MouseWheelScrolled) {
+            if (event.mouseWheelScroll.wheel != sf::Mouse::VerticalWheel)
+                continue;
+
+            this->_fileBarOffset += event.mouseWheelScroll.delta * MOUSE_WHEEL_SENSITIVITY;
+
+            const float visibleHeight = this->_window->getSize().y - this->_pwdRect->getSize().y;
+            const float contentHeight = this->_entries.size() * (TEXT_SIZE + FILE_SEP_SIZE) + FILE_SEP_SIZE / 2.f;
+
+            float minOffset = 0.f;
+            if (contentHeight > visibleHeight)
+                minOffset = visibleHeight - contentHeight;
+
+            if (this->_fileBarOffset > 0.f)
+                this->_fileBarOffset = 0.f;
+            if (this->_fileBarOffset < minOffset)
+                this->_fileBarOffset = minOffset;
         }
     }
     return false;
