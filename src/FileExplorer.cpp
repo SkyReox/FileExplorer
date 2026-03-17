@@ -46,6 +46,7 @@ void fe::FileExplorer::init()
     this->_pwdBarRect->setPosition(sf::Vector2f(PWD_OFFSET, 5));
 
     this->getEntries();
+
 }
 
 void fe::FileExplorer::getEntries()
@@ -79,6 +80,7 @@ void fe::FileExplorer::getEntries()
 
     std::string dir = home;
     auto nDirs = std::count(this->_dirPath.begin(), this->_dirPath.end(), '/');
+    float pwdButtonsLength = this->_pwdButtons.back()->getGlobalX();
     for (std::size_t i = 2; i < nDirs; i++) {
         pwdButtonPos.x += this->_pwdButtons[this->_pwdButtons.size() - 1]->getGlobalX() + 10;
 
@@ -90,6 +92,11 @@ void fe::FileExplorer::getEntries()
             dir = this->_dirPath;
 
         this->_pwdButtons.push_back(std::make_unique<DirButton>(dir, *this->_font, pwdButtonPos));
+        pwdButtonsLength += this->_pwdButtons.back()->getGlobalX() + PWD_BUTTON_SEP;
+        if (pwdButtonsLength > this->_window->getSize().x - PWD_OFFSET * 4) {
+            pwdButtonsLength -= this->_pwdButtons.front()->getGlobalX();
+            this->_pwdButtons.erase(this->_pwdButtons.begin());
+        }
     }
 }
 
