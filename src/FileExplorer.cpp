@@ -43,7 +43,7 @@ void fe::FileExplorer::init()
     this->_pwdRect->setOutlineColor(sf::Color(80, 80, 80));
     this->_pwdRect->setOutlineThickness(1);
 
-    this->_pwdBarRect = std::make_unique<RoundedRectangleShape>(sf::Vector2f(this->_window->getSize().x - PWD_OFFSET * 2, 40), 10., 8);
+    this->_pwdBarRect = std::make_unique<RoundedRectangleShape>(sf::Vector2f(this->_window->getSize().x - PWD_OFFSET * 4, 40), 10., 8);
     this->_pwdBarRect->setFillColor(sf::Color(80, 80, 80));
     this->_pwdBarRect->setPosition(sf::Vector2f(PWD_OFFSET, 5));
 
@@ -73,12 +73,13 @@ void fe::FileExplorer::getEntries()
             continue;
         if (entryName[0] == '.' && !this->_showHidden)
             continue;
-        this->_entries.push_back(std::make_unique<fe::FileBar>(entry, *this->_font, fileBarSize));
+        this->_entries.push_back(std::make_unique<fe::FileBar>(entry, this->_dirPath, *this->_font, fileBarSize));
     }
     if (this->_dirPath.rfind(home, 0) == std::string::npos)
         return;
     sf::Vector2f pwdButtonPos(75, this->_pwdBarRect->getGlobalBounds().getSize().y - 10);
     this->_pwdButtons.push_back(std::make_unique<DirButton>(home, *this->_font, pwdButtonPos));
+    this->sortEntries(this->_sortType, this->_ascending);
 
     std::string dir = home;
     auto nDirs = std::count(this->_dirPath.begin(), this->_dirPath.end(), '/');
@@ -95,10 +96,41 @@ void fe::FileExplorer::getEntries()
 
         this->_pwdButtons.push_back(std::make_unique<DirButton>(dir, *this->_font, pwdButtonPos));
         pwdButtonsLength += this->_pwdButtons.back()->getGlobalX() + PWD_BUTTON_SEP;
-        if (pwdButtonsLength > this->_window->getSize().x - PWD_OFFSET * 4) {
+        if (pwdButtonsLength > this->_pwdBarRect->getGlobalBounds().getSize().x) {
             pwdButtonsLength -= this->_pwdButtons.front()->getGlobalX();
             this->_pwdButtons.erase(this->_pwdButtons.begin());
         }
+    }
+}
+
+static std::string toLowerString(std::string str)
+{
+    std::transform(str.begin(), str.end(), str.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+    return str;
+}
+
+void fe::FileExplorer::sortEntries(SortType type, bool ascending)
+{
+    switch (type) {
+        case SortType::Name:
+            std::sort(this->_entries.begin(), this->_entries.end(),
+                [ascending](const auto& a, const auto& b) {
+                    std::string aName = toLowerString(a->getFileName());
+                    std::string bName = toLowerString(b->getFileName());
+
+                    return ascending ? (aName < bName) : (aName > bName);
+                });
+            break;
+        case SortType::Size:
+            std::sort(this->_entries.begin(), this->_entries.end(),
+                [ascending](const auto& a, const auto& b) {
+                    std::size_t aSize = a->getFileSize();
+                    std::size_t bSize = b->getFileSize();
+
+                    return ascending ? (aSize < bSize) : (aSize > bSize);
+                });
+            break;
     }
 }
 
@@ -167,8 +199,12 @@ void fe::FileExplorer::display()
 
     // File Bars
     float pwdRectY = this->_pwdRect->getSize().y;
-    for (std::size_t i = 0; i < this->_entries.size(); i++)
-        this->_entries[i]->draw(sf::Vector2f(0, FILE_SEP_SIZE / 2 + i * (TEXT_SIZE + FILE_SEP_SIZE) + pwdRectY + this->_fileBarOffset), *this->_window);
+    for (std::size_t i = 0; i < this->_entries.size(); i++) {
+        float entryY = FILE_SEP_SIZE / 2 + i * (TEXT_SIZE + FILE_SEP_SIZE) + pwdRectY + this->_fileBarOffset;
+        if (entryY < 0 || entryY >= this->_window->getSize().y)
+            continue;
+        this->_entries[i]->draw(sf::Vector2f(0, entryY), *this->_window);
+    }
 
     // PWD Bar
     this->_window->draw(*this->_pwdRect);

@@ -6,9 +6,12 @@
 */
 
 #include "FileBar.hpp"
+#include <filesystem>
 
-fe::FileBar::FileBar(struct dirent* file, sf::Font& font, sf::Vector2f size)
-    : _file(file), Button(size)
+namespace fs = std::filesystem;
+
+fe::FileBar::FileBar(struct dirent* file, const std::string& parentPath, sf::Font& font, sf::Vector2f size)
+    : _file(file), _path((fs::path(parentPath) / file->d_name).string()), Button(size)
 {
     this->_text = std::make_unique<sf::Text>();
     this->_text->setFont(font);
@@ -23,9 +26,25 @@ std::string fe::FileBar::getFileName() const noexcept
 
 bool fe::FileBar::isDirectory() const
 {
-    if (this->_file->d_type == DT_DIR)
-        return true;
-    return false;
+    return fs::is_directory(this->_path);
+}
+
+std::size_t fe::FileBar::getFileSize() const
+{
+    if (!fs::exists(this->_path))
+        return 0;
+
+    if (fs::is_regular_file(this->_path))
+        return static_cast<std::size_t>(fs::file_size(this->_path));
+
+    std::uintmax_t size = 0;
+
+    for (const auto& entry : fs::recursive_directory_iterator(this->_path)) {
+        if (fs::is_regular_file(entry.path()))
+            size += fs::file_size(entry.path());
+    }
+
+    return static_cast<std::size_t>(size);
 }
 
 void fe::FileBar::update(sf::RenderWindow& window)

@@ -12,7 +12,7 @@
     #define FAILURE 84
 
     #define FPS 60
-    #define MOUSE_WHEEL_SENSITIVITY 7
+    #define MOUSE_WHEEL_SENSITIVITY 20
 
     #define FONT_PATH "resources/Arial Regular.ttf"
     #define TEXT_SIZE 20

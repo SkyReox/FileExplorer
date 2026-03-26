@@ -49,9 +49,19 @@ namespace fe
         void display();
 
         public:
+            enum SortType {
+                Name,
+                Size
+            };
+
             FileExplorer(std::string windowName);
             ~FileExplorer() = default;
             std::ifstream open();
+
+        private:
+            SortType _sortType = SortType::Name;
+            bool _ascending = true;
+            void sortEntries(SortType type, bool ascending=true);
     };
 }
 

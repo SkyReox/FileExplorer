@@ -19,10 +19,11 @@
 namespace fe {
     class FileBar : public Button {
         struct dirent* _file;
+        std::string _path;
         std::unique_ptr<sf::Text> _text;
 
         public:
-            FileBar(struct dirent* file, sf::Font& font, sf::Vector2f size = sf::Vector2f(sf::VideoMode::getDesktopMode().width, TEXT_SIZE + FILE_SEP_SIZE * 0.8));
+            FileBar(struct dirent* file, const std::string& parentPath, sf::Font& font, sf::Vector2f size = sf::Vector2f(sf::VideoMode::getDesktopMode().width, TEXT_SIZE + FILE_SEP_SIZE * 0.8));
 
             ~FileBar() = default;
             FileBar(const FileBar&) = delete;
@@ -34,6 +35,7 @@ namespace fe {
             void draw(sf::Vector2f pos, sf::RenderWindow& window) final;
             bool isDirectory() const;
             std::string getFileName() const noexcept;
+            std::size_t getFileSize() const;
     };
 }
 
