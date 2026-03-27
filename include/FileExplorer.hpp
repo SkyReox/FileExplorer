@@ -13,6 +13,8 @@
 #include "DirButton.hpp"
 #include "FileBar.hpp"
 #include "RoundedRectangleShape.hpp"
+#include "TextButton.hpp"
+#include <array>
 #include <dirent.h>
 #include <fstream>
 #include <memory>
@@ -41,12 +43,20 @@ namespace fe
         std::unique_ptr<sf::RectangleShape> _pwdRect;
         std::unique_ptr<RoundedRectangleShape> _pwdBarRect;
         std::vector<std::unique_ptr<DirButton>> _pwdButtons;
+        std::unique_ptr<TextButton> _sortButton;
+        std::array<std::unique_ptr<TextButton>, 4> _sortMenuButtons;
+        std::unique_ptr<RoundedRectangleShape> _sortMenuRect;
+        bool _sortMenuOpen = false;
 
         void init();
         void getEntries();
         bool handleEvents(std::ifstream& res);
         void update();
         void display();
+        void initSortControls();
+        void refreshSortLayout();
+        bool handleSortClick(const sf::Vector2f& mouseWorld);
+        bool isPointInsideSortMenu(const sf::Vector2f& mouseWorld) const;
 
         public:
             enum SortType {
@@ -61,7 +71,7 @@ namespace fe
         private:
             SortType _sortType = SortType::Name;
             bool _ascending = true;
-            void sortEntries(SortType type, bool ascending=true);
+            void sortEntries(SortType type, bool ascending = true);
     };
 }
 

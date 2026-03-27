@@ -10,6 +10,7 @@ SRC =	src/FileExplorer.cpp			\
 		src/RoundedRectangleShape.cpp	\
 		src/Button.cpp					\
 		src/DirButton.cpp				\
+		src/TextButton.cpp				\
 
 MAIN =	src/main.cpp
 

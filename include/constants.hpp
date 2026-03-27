@@ -22,4 +22,10 @@
     #define PWD_OFFSET 20
     #define PWD_BUTTON_SEP 30
 
+    #define SORT_BUTTON_WIDTH 110.f
+    #define SORT_BUTTON_HEIGHT 30.f
+    #define SORT_BUTTON_GAP 10.f
+    #define SORT_MENU_WIDTH 170.f
+    #define SORT_MENU_HEIGHT 160.f
+
 #endif /* CONSTANTS_HPP_ */

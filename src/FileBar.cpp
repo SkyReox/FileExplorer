@@ -11,7 +11,7 @@
 namespace fs = std::filesystem;
 
 fe::FileBar::FileBar(struct dirent* file, const std::string& parentPath, sf::Font& font, sf::Vector2f size)
-    : _file(file), _path((fs::path(parentPath) / file->d_name).string()), Button(size)
+    : _fileName(file->d_name), _path((fs::path(parentPath) / file->d_name).string()), Button(size)
 {
     this->_text = std::make_unique<sf::Text>();
     this->_text->setFont(font);
@@ -21,7 +21,7 @@ fe::FileBar::FileBar(struct dirent* file, const std::string& parentPath, sf::Fon
 
 std::string fe::FileBar::getFileName() const noexcept
 {
-    return this->_file->d_name;
+    return this->_fileName;
 }
 
 bool fe::FileBar::isDirectory() const
@@ -71,7 +71,7 @@ void fe::FileBar::draw(sf::Vector2f pos, sf::RenderWindow& window)
     this->_rect->setPosition(pos);
     window.draw(*this->_rect.get());
 
-    this->_text->setString(this->_file->d_name);
+    this->_text->setString(this->_fileName);
     this->_text->setPosition(sf::Vector2f(pos.x + 5, pos.y + 3));
     window.draw(*this->_text);
 }

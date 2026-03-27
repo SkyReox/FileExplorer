@@ -18,7 +18,7 @@
 
 namespace fe {
     class FileBar : public Button {
-        struct dirent* _file;
+        std::string _fileName;
         std::string _path;
         std::unique_ptr<sf::Text> _text;
 

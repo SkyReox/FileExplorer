@@ -9,6 +9,7 @@
 #include "FileBar.hpp"
 #include "FileExplorer.hpp"
 #include <algorithm>
+#include <array>
 #include <dirent.h>
 #include <exception>
 #include <iostream>
@@ -43,18 +44,73 @@ void fe::FileExplorer::init()
     this->_pwdRect->setOutlineColor(sf::Color(80, 80, 80));
     this->_pwdRect->setOutlineThickness(1);
 
-    this->_pwdBarRect = std::make_unique<RoundedRectangleShape>(sf::Vector2f(this->_window->getSize().x - PWD_OFFSET * 4, 40), 10., 8);
+    this->_pwdBarRect = std::make_unique<RoundedRectangleShape>(sf::Vector2f(this->_window->getSize().x - (PWD_OFFSET * 2 + SORT_BUTTON_WIDTH), 40), 10., 8);
     this->_pwdBarRect->setFillColor(sf::Color(80, 80, 80));
     this->_pwdBarRect->setPosition(sf::Vector2f(PWD_OFFSET, 5));
+    this->initSortControls();
 
     this->getEntries();
+}
 
+void fe::FileExplorer::initSortControls()
+{
+    this->_sortButton = std::make_unique<TextButton>(
+        "Sort",
+        *this->_font,
+        sf::Vector2f(SORT_BUTTON_WIDTH, SORT_BUTTON_HEIGHT)
+    );
+    this->_sortMenuRect = std::make_unique<RoundedRectangleShape>(
+        sf::Vector2f(SORT_MENU_WIDTH, SORT_MENU_HEIGHT),
+        10.f,
+        8
+    );
+    this->_sortMenuRect->setFillColor(sf::Color(65, 65, 65));
+    this->_sortMenuRect->setOutlineColor(sf::Color(100, 100, 100));
+    this->_sortMenuRect->setOutlineThickness(1.f);
+
+    const std::array<std::string, 4> labels = {
+        "Name",
+        "Size",
+        "Ascending",
+        "Descending"
+    };
+
+    for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++)
+        this->_sortMenuButtons[i] = std::make_unique<TextButton>(labels[i], *this->_font, sf::Vector2f(150.f, SORT_BUTTON_HEIGHT));
+    this->refreshSortLayout();
+}
+
+void fe::FileExplorer::refreshSortLayout()
+{
+    const sf::Vector2f barPos = this->_pwdBarRect->getPosition();
+    const sf::FloatRect barBounds = this->_pwdBarRect->getGlobalBounds();
+    const float buttonX = barPos.x + barBounds.width + SORT_BUTTON_GAP;
+    const float buttonY = barPos.y + (barBounds.height - SORT_BUTTON_HEIGHT) / 2.f;
+
+    this->_sortButton->setPosition(sf::Vector2f(buttonX, buttonY));
+    this->_sortMenuRect->setPosition(sf::Vector2f(
+        buttonX + SORT_BUTTON_WIDTH - this->_sortMenuRect->getGlobalBounds().width,
+        barPos.y + barBounds.height + 5.f
+    ));
+
+    const sf::Vector2f menuPos = this->_sortMenuRect->getPosition();
+    for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++)
+        this->_sortMenuButtons[i]->setPosition(sf::Vector2f(menuPos.x + 10.f, menuPos.y + 10.f + i * 36.f));
 }
 
 void fe::FileExplorer::getEntries()
 {
     struct dirent* entry;
     const char *homeEnv = std::getenv("HOME");
+    const auto getPwdButtonsWidth = [this]() {
+        float totalWidth = 0.f;
+
+        for (const auto& button : this->_pwdButtons)
+            totalWidth += button->getGlobalX();
+        if (!this->_pwdButtons.empty())
+            totalWidth += static_cast<float>(this->_pwdButtons.size() - 1) * PWD_BUTTON_SEP;
+        return totalWidth;
+    };
 
     if (!homeEnv)
         throw std::runtime_error("'HOME' isn't set in the environment");
@@ -75,15 +131,15 @@ void fe::FileExplorer::getEntries()
             continue;
         this->_entries.push_back(std::make_unique<fe::FileBar>(entry, this->_dirPath, *this->_font, fileBarSize));
     }
+    this->sortEntries(this->_sortType, this->_ascending);
     if (this->_dirPath.rfind(home, 0) == std::string::npos)
         return;
     sf::Vector2f pwdButtonPos(75, this->_pwdBarRect->getGlobalBounds().getSize().y - 10);
     this->_pwdButtons.push_back(std::make_unique<DirButton>(home, *this->_font, pwdButtonPos));
-    this->sortEntries(this->_sortType, this->_ascending);
 
     std::string dir = home;
     auto nDirs = std::count(this->_dirPath.begin(), this->_dirPath.end(), '/');
-    float pwdButtonsLength = this->_pwdButtons.back()->getGlobalX();
+    const float availablePwdWidth = this->_pwdBarRect->getGlobalBounds().getSize().x - 20.f;
     for (std::size_t i = 2; i < nDirs; i++) {
         pwdButtonPos.x += this->_pwdButtons[this->_pwdButtons.size() - 1]->getGlobalX() + 10;
 
@@ -95,11 +151,8 @@ void fe::FileExplorer::getEntries()
             dir = this->_dirPath;
 
         this->_pwdButtons.push_back(std::make_unique<DirButton>(dir, *this->_font, pwdButtonPos));
-        pwdButtonsLength += this->_pwdButtons.back()->getGlobalX() + PWD_BUTTON_SEP;
-        if (pwdButtonsLength > this->_pwdBarRect->getGlobalBounds().getSize().x) {
-            pwdButtonsLength -= this->_pwdButtons.front()->getGlobalX();
+        while (this->_pwdButtons.size() > 1 && getPwdButtonsWidth() > availablePwdWidth)
             this->_pwdButtons.erase(this->_pwdButtons.begin());
-        }
     }
 }
 
@@ -134,6 +187,45 @@ void fe::FileExplorer::sortEntries(SortType type, bool ascending)
     }
 }
 
+bool fe::FileExplorer::isPointInsideSortMenu(const sf::Vector2f& mousePos) const
+{
+    if (!this->_sortMenuOpen)
+        return false;
+    if (this->_sortButton->getGlobalBounds().contains(mousePos))
+        return true;
+    return this->_sortMenuRect->getGlobalBounds().contains(mousePos);
+}
+
+bool fe::FileExplorer::handleSortClick(const sf::Vector2f& mousePos)
+{
+    const std::array<std::pair<SortType, bool>, 4> actions = {{
+        {SortType::Name, this->_ascending},
+        {SortType::Size, this->_ascending},
+        {this->_sortType, true},
+        {this->_sortType, false}
+    }};
+
+    if (this->_sortButton->getGlobalBounds().contains(mousePos)) {
+        this->_sortMenuOpen = !this->_sortMenuOpen;
+        return true;
+    }
+    if (!this->_sortMenuOpen)
+        return false;
+    for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++) {
+        if (!this->_sortMenuButtons[i]->getGlobalBounds().contains(mousePos))
+            continue;
+        this->_sortType = actions[i].first;
+        this->_ascending = actions[i].second;
+        this->sortEntries(this->_sortType, this->_ascending);
+        this->_sortMenuOpen = false;
+        return true;
+    }
+    if (this->isPointInsideSortMenu(mousePos))
+        return true;
+    this->_sortMenuOpen = false;
+    return true;
+}
+
 bool fe::FileExplorer::handleEvents(std::ifstream& res)
 {
     sf::Event event;
@@ -147,6 +239,12 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
         // Mouse Button
         if (event.type == sf::Event::MouseButtonPressed)
             if (event.mouseButton.button == sf::Mouse::Left) {
+                const sf::Vector2f mousePos = this->_window->mapPixelToCoords(
+                    sf::Vector2i(event.mouseButton.x, event.mouseButton.y)
+                );
+
+                if (this->handleSortClick(mousePos))
+                    continue;
                 for (std::size_t i = 0; i < this->_entries.size(); i++)
                     if (this->_entries[i]->getHover()) {
                         if (!this->_entries[i]->isDirectory()) {
@@ -209,6 +307,7 @@ void fe::FileExplorer::display()
     // PWD Bar
     this->_window->draw(*this->_pwdRect);
     this->_window->draw(*this->_pwdBarRect);
+    this->refreshSortLayout();
     this->_text->setString("/");
     float pwdButtonY = (this->_pwdBarRect->getGlobalBounds().getSize().y - this->_text->getGlobalBounds().getSize().y) / 2;
     float pwdOffset = PWD_OFFSET + 10;
@@ -220,6 +319,18 @@ void fe::FileExplorer::display()
             this->_window->draw(*this->_text);
         }
     }
+    this->_sortButton->draw(
+        sf::Vector2f(this->_sortButton->getGlobalBounds().left, this->_sortButton->getGlobalBounds().top),
+        *this->_window
+    );
+    if (this->_sortMenuOpen) {
+        this->_window->draw(*this->_sortMenuRect);
+        for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++)
+            this->_sortMenuButtons[i]->draw(
+                sf::Vector2f(this->_sortMenuButtons[i]->getGlobalBounds().left, this->_sortMenuButtons[i]->getGlobalBounds().top),
+                *this->_window
+            );
+    }
 
     this->_window->display();
 }
@@ -230,6 +341,11 @@ void fe::FileExplorer::update()
         this->_entries[i]->update(*this->_window);
     for (size_t i = 0; i < this->_pwdButtons.size(); i++)
         this->_pwdButtons[i]->update(*this->_window);
+    this->_sortButton->update(*this->_window);
+    if (!this->_sortMenuOpen)
+        return;
+    for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++)
+        this->_sortMenuButtons[i]->update(*this->_window);
 }
 
 std::ifstream fe::FileExplorer::open()
