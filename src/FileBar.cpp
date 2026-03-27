@@ -6,17 +6,43 @@
 */
 
 #include "FileBar.hpp"
+#include <algorithm>
 #include <filesystem>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
+static sf::Texture& getDirectoryTexture()
+{
+    static sf::Texture texture;
+    static bool isLoaded = texture.loadFromFile(DIRECTORY_ICON_PATH);
+
+    if (!isLoaded)
+        throw std::runtime_error("Directory icon couldn't be loaded");
+    return texture;
+}
+
 fe::FileBar::FileBar(struct dirent* file, const std::string& parentPath, sf::Font& font, sf::Vector2f size)
-    : _fileName(file->d_name), _path((fs::path(parentPath) / file->d_name).string()), Button(size)
+    : Button(size), _fileName(file->d_name), _path((fs::path(parentPath) / file->d_name).string()), _isDirectory(fs::is_directory(_path))
 {
     this->_text = std::make_unique<sf::Text>();
     this->_text->setFont(font);
     this->_text->setCharacterSize(TEXT_SIZE);
     this->_text->setFillColor(sf::Color::White);
+
+    if (this->_isDirectory) {
+        sf::Texture& texture = getDirectoryTexture();
+
+        this->_directoryIcon = std::make_unique<sf::Sprite>(texture);
+        const sf::Vector2u textureSize = texture.getSize();
+
+        if (textureSize.x > 0 && textureSize.y > 0) {
+            const float maxDimension = static_cast<float>(std::max(textureSize.x, textureSize.y));
+            const float scale = FILEBAR_ICON_SIZE / maxDimension;
+
+            this->_directoryIcon->setScale(scale, scale);
+        }
+    }
 }
 
 std::string fe::FileBar::getFileName() const noexcept
@@ -26,7 +52,7 @@ std::string fe::FileBar::getFileName() const noexcept
 
 bool fe::FileBar::isDirectory() const
 {
-    return fs::is_directory(this->_path);
+    return this->_isDirectory;
 }
 
 std::size_t fe::FileBar::getFileSize() const
@@ -72,6 +98,25 @@ void fe::FileBar::draw(sf::Vector2f pos, sf::RenderWindow& window)
     window.draw(*this->_rect.get());
 
     this->_text->setString(this->_fileName);
-    this->_text->setPosition(sf::Vector2f(pos.x + 5, pos.y + 3));
+    float textX = pos.x + FILEBAR_TEXT_PADDING;
+
+    if (this->_isDirectory && this->_directoryIcon) {
+        const sf::FloatRect buttonBounds = this->_rect->getGlobalBounds();
+        const sf::FloatRect iconBounds = this->_directoryIcon->getGlobalBounds();
+
+        this->_directoryIcon->setPosition(
+            pos.x + FILEBAR_TEXT_PADDING,
+            pos.y + (buttonBounds.height - iconBounds.height) / 2.f
+        );
+        textX += this->_directoryIcon->getGlobalBounds().width + FILEBAR_ICON_GAP;
+        window.draw(*this->_directoryIcon);
+    }
+
+    const sf::FloatRect textBounds = this->_text->getLocalBounds();
+
+    this->_text->setPosition(sf::Vector2f(
+        textX,
+        pos.y + (this->_rect->getGlobalBounds().height - textBounds.height) / 2.f - textBounds.top - 1.f
+    ));
     window.draw(*this->_text);
 }

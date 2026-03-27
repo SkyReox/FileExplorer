@@ -15,8 +15,12 @@
     #define MOUSE_WHEEL_SENSITIVITY 20
 
     #define FONT_PATH "resources/Arial Regular.ttf"
+    #define DIRECTORY_ICON_PATH "assets/directory.png"
     #define TEXT_SIZE 20
     #define FILE_SEP_SIZE 15
+    #define FILEBAR_TEXT_PADDING 5.f
+    #define FILEBAR_ICON_SIZE 24.f
+    #define FILEBAR_ICON_GAP 8.f
 
     #define PWD_RECT_SIZE_Y 50.f
     #define PWD_OFFSET 20

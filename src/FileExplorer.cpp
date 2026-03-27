@@ -260,6 +260,8 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
                     }
                 for (std::size_t i = 0; i < this->_pwdButtons.size(); i++) {
                     if (this->_pwdButtons[i]->getHover()) {
+                        if (this->_pwdButtons[i]->getDirPath() == this->_dirPath)
+                            return false;
                         closedir(this->_dir);
                         this->_dirPath = this->_pwdButtons[i]->getDirPath();
                         this->getEntries();

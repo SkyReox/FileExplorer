@@ -20,7 +20,9 @@ namespace fe {
     class FileBar : public Button {
         std::string _fileName;
         std::string _path;
+        bool _isDirectory;
         std::unique_ptr<sf::Text> _text;
+        std::unique_ptr<sf::Sprite> _directoryIcon;
 
         public:
             FileBar(struct dirent* file, const std::string& parentPath, sf::Font& font, sf::Vector2f size = sf::Vector2f(sf::VideoMode::getDesktopMode().width, TEXT_SIZE + FILE_SEP_SIZE * 0.8));
