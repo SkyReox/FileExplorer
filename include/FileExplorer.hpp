@@ -69,6 +69,7 @@ namespace fe
         bool isPointInsideContextMenu(const sf::Vector2f& mousePos) const;
         void openRenameDialog();
         bool submitRename();
+        bool moveTargetToTrash();
 
         public:
             enum SortType {

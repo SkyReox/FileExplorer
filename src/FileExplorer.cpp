@@ -10,10 +10,13 @@
 #include "FileExplorer.hpp"
 #include <algorithm>
 #include <array>
+#include <ctime>
 #include <dirent.h>
 #include <exception>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -25,6 +28,34 @@ namespace {
         "Move To Trash",
         "Properties"
     }};
+
+    std::string encodeTrashPath(const std::filesystem::path& path)
+    {
+        std::ostringstream encoded;
+        const std::string rawPath = path.string();
+
+        for (unsigned char c : rawPath) {
+            if (std::isalnum(c) || c == '/' || c == '-' || c == '_' || c == '.' || c == '~') {
+                encoded << static_cast<char>(c);
+                continue;
+            }
+            encoded << '%' << std::uppercase << std::hex << std::setw(2) << std::setfill('0')
+                << static_cast<int>(c) << std::nouppercase << std::dec;
+        }
+        return encoded.str();
+    }
+
+    std::string getTrashDeletionDate()
+    {
+        const std::time_t now = std::time(nullptr);
+        const std::tm* localTime = std::localtime(&now);
+        std::ostringstream stream;
+
+        if (!localTime)
+            return "";
+        stream << std::put_time(localTime, "%Y-%m-%dT%H:%M:%S");
+        return stream.str();
+    }
 }
 
 fe::FileExplorer::FileExplorer(std::string windowName) : _windowName(windowName)
@@ -295,6 +326,53 @@ bool fe::FileExplorer::submitRename()
     return true;
 }
 
+bool fe::FileExplorer::moveTargetToTrash()
+{
+    const char* homeEnv = std::getenv("HOME");
+
+    if (!homeEnv)
+        return false;
+
+    const std::filesystem::path sourcePath = std::filesystem::path(this->_dirPath) / this->_contextMenuTarget;
+    const std::filesystem::path trashFilesDir = std::filesystem::path(homeEnv) / ".local/share/Trash/files";
+    const std::filesystem::path trashInfoDir = std::filesystem::path(homeEnv) / ".local/share/Trash/info";
+    const std::string deletionDate = getTrashDeletionDate();
+    std::filesystem::path trashedFileName = sourcePath.filename();
+    std::filesystem::path targetPath = trashFilesDir / trashedFileName;
+    std::filesystem::path infoPath = trashInfoDir / (trashedFileName.string() + ".trashinfo");
+
+    try {
+        std::filesystem::create_directories(trashFilesDir);
+        std::filesystem::create_directories(trashInfoDir);
+        for (std::size_t i = 2; std::filesystem::exists(targetPath) || std::filesystem::exists(infoPath); i++) {
+            trashedFileName = sourcePath.filename().string() + "." + std::to_string(i);
+            targetPath = trashFilesDir / trashedFileName;
+            infoPath = trashInfoDir / (trashedFileName.string() + ".trashinfo");
+        }
+
+        std::ofstream infoFile(infoPath);
+
+        if (!infoFile.is_open())
+            throw std::runtime_error("Couldn't create trash metadata file");
+        infoFile << "[Trash Info]\n";
+        infoFile << "Path=" << encodeTrashPath(sourcePath) << "\n";
+        infoFile << "DeletionDate=" << deletionDate << "\n";
+        infoFile.close();
+
+        std::filesystem::rename(sourcePath, targetPath);
+    } catch (const std::exception& e) {
+        if (std::filesystem::exists(infoPath))
+            std::filesystem::remove(infoPath);
+        std::cerr << "Failed to move '" << this->_contextMenuTarget << "' to trash: " << e.what() << std::endl;
+        return false;
+    }
+
+    this->_contextMenuOpen = false;
+    closedir(this->_dir);
+    this->getEntries();
+    return true;
+}
+
 bool fe::FileExplorer::handleSortClick(const sf::Vector2f& mousePos)
 {
     const std::array<std::pair<SortType, bool>, 4> actions = {{
@@ -336,6 +414,8 @@ bool fe::FileExplorer::handleContextMenuClick(const sf::Vector2f& mousePos)
             this->openRenameDialog();
             return true;
         }
+        if (i == 3)
+            return this->moveTargetToTrash();
         std::cout << "[DEBUG] " << CONTEXT_MENU_LABELS[i] << " clicked for " << this->_contextMenuTarget << std::endl;
         this->_contextMenuOpen = false;
         return true;
