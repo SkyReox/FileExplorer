@@ -31,5 +31,10 @@
     #define SORT_BUTTON_GAP 10.f
     #define SORT_MENU_WIDTH 170.f
     #define SORT_MENU_HEIGHT 160.f
+    #define CONTEXT_MENU_WIDTH 190.f
+    #define CONTEXT_MENU_HEIGHT 200.f
+    #define RENAME_DIALOG_WIDTH 420.f
+    #define RENAME_DIALOG_HEIGHT 170.f
+    #define RENAME_INPUT_HEIGHT 42.f
 
 #endif /* CONSTANTS_HPP_ */

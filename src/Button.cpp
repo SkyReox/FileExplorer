@@ -18,6 +18,11 @@ bool fe::Button::getHover() const noexcept
     return this->_hover;
 }
 
+sf::FloatRect fe::Button::getGlobalBounds() const noexcept
+{
+    return this->_rect->getGlobalBounds();
+}
+
 void fe::Button::update(sf::RenderWindow& window)
 {
     sf::Vector2i mousePixel = sf::Mouse::getPosition(window);

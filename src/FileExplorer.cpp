@@ -12,9 +12,20 @@
 #include <array>
 #include <dirent.h>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
+
+namespace {
+    const std::array<std::string, 5> CONTEXT_MENU_LABELS = {{
+        "Rename",
+        "Copy",
+        "Cut",
+        "Move To Trash",
+        "Properties"
+    }};
+}
 
 fe::FileExplorer::FileExplorer(std::string windowName) : _windowName(windowName)
 {
@@ -48,6 +59,8 @@ void fe::FileExplorer::init()
     this->_pwdBarRect->setFillColor(sf::Color(80, 80, 80));
     this->_pwdBarRect->setPosition(sf::Vector2f(PWD_OFFSET, 5));
     this->initSortControls();
+    this->initContextMenu();
+    this->_renameDialog = std::make_unique<fe::RenameDialog>(*this->_font);
 
     this->getEntries();
 }
@@ -80,6 +93,21 @@ void fe::FileExplorer::initSortControls()
     this->refreshSortLayout();
 }
 
+void fe::FileExplorer::initContextMenu()
+{
+    this->_contextMenuRect = std::make_unique<RoundedRectangleShape>(sf::Vector2f(CONTEXT_MENU_WIDTH, CONTEXT_MENU_HEIGHT), 10, 8);
+    this->_contextMenuRect->setFillColor(sf::Color(65, 65, 65));
+    this->_contextMenuRect->setOutlineColor(sf::Color(100, 100, 100));
+    this->_contextMenuRect->setOutlineThickness(1);
+
+    for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++)
+        this->_contextMenuButtons[i] = std::make_unique<TextButton>(
+            CONTEXT_MENU_LABELS[i],
+            *this->_font,
+            sf::Vector2f(170, SORT_BUTTON_HEIGHT)
+        );
+}
+
 void fe::FileExplorer::refreshSortLayout()
 {
     const sf::Vector2f barPos = this->_pwdBarRect->getPosition();
@@ -88,14 +116,31 @@ void fe::FileExplorer::refreshSortLayout()
     const float buttonY = barPos.y + (barBounds.height - SORT_BUTTON_HEIGHT) / 2.f;
 
     this->_sortButton->setPosition(sf::Vector2f(buttonX, buttonY));
-    this->_sortMenuRect->setPosition(sf::Vector2f(
-        buttonX + SORT_BUTTON_WIDTH - this->_sortMenuRect->getGlobalBounds().width,
-        barPos.y + barBounds.height + 5.f
-    ));
+    this->_sortMenuRect->setPosition(sf::Vector2f(buttonX + SORT_BUTTON_WIDTH - this->_sortMenuRect->getGlobalBounds().width, barPos.y + barBounds.height + 5.f));
 
     const sf::Vector2f menuPos = this->_sortMenuRect->getPosition();
     for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++)
         this->_sortMenuButtons[i]->setPosition(sf::Vector2f(menuPos.x + 10.f, menuPos.y + 10.f + i * 36.f));
+}
+
+void fe::FileExplorer::refreshContextMenuLayout(const sf::Vector2f& mousePos)
+{
+    sf::Vector2f menuPos = mousePos;
+    const sf::Vector2u windowSize = this->_window->getSize();
+    const sf::FloatRect menuBounds = this->_contextMenuRect->getGlobalBounds();
+
+    if (menuPos.x + menuBounds.width > static_cast<float>(windowSize.x))
+        menuPos.x = static_cast<float>(windowSize.x) - menuBounds.width - 5.f;
+    if (menuPos.y + menuBounds.height > static_cast<float>(windowSize.y))
+        menuPos.y = static_cast<float>(windowSize.y) - menuBounds.height - 5.f;
+    if (menuPos.x < 0.f)
+        menuPos.x = 0.f;
+    if (menuPos.y < 0.f)
+        menuPos.y = 0.f;
+
+    this->_contextMenuRect->setPosition(menuPos);
+    for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++)
+        this->_contextMenuButtons[i]->setPosition(sf::Vector2f(menuPos.x + 10.f, menuPos.y + 10.f + i * 36.f));
 }
 
 void fe::FileExplorer::getEntries()
@@ -116,6 +161,7 @@ void fe::FileExplorer::getEntries()
         throw std::runtime_error("'HOME' isn't set in the environment");
     std::string home = homeEnv;
 
+    // Get Entries
     this->_dir = opendir(this->_dirPath.c_str());
     if (!this->_dir)
         throw std::runtime_error("Couldn't open directory");
@@ -132,6 +178,8 @@ void fe::FileExplorer::getEntries()
         this->_entries.push_back(std::make_unique<fe::FileBar>(entry, this->_dirPath, *this->_font, fileBarSize));
     }
     this->sortEntries(this->_sortType, this->_ascending);
+
+    // Dir Buttons
     if (this->_dirPath.rfind(home, 0) == std::string::npos)
         return;
     sf::Vector2f pwdButtonPos(75, this->_pwdBarRect->getGlobalBounds().getSize().y - 10);
@@ -196,6 +244,57 @@ bool fe::FileExplorer::isPointInsideSortMenu(const sf::Vector2f& mousePos) const
     return this->_sortMenuRect->getGlobalBounds().contains(mousePos);
 }
 
+bool fe::FileExplorer::isPointInsideContextMenu(const sf::Vector2f& mousePos) const
+{
+    if (!this->_contextMenuOpen)
+        return false;
+    return this->_contextMenuRect->getGlobalBounds().contains(mousePos);
+}
+
+void fe::FileExplorer::openRenameDialog()
+{
+    this->_renameDialog->open(this->_contextMenuTarget);
+    this->_contextMenuOpen = false;
+}
+
+bool fe::FileExplorer::submitRename()
+{
+    const std::string& renameInput = this->_renameDialog->getInput();
+    const std::string& renameTarget = this->_renameDialog->getTarget();
+
+    if (renameInput.empty()) {
+        this->_renameDialog->setError("Name can't be empty");
+        return false;
+    }
+    if (renameInput.find('/') != std::string::npos) {
+        this->_renameDialog->setError("Name can't contain '/'");
+        return false;
+    }
+    if (renameInput == renameTarget) {
+        this->_renameDialog->close();
+        return true;
+    }
+
+    const std::filesystem::path sourcePath = std::filesystem::path(this->_dirPath) / renameTarget;
+    const std::filesystem::path targetPath = std::filesystem::path(this->_dirPath) / renameInput;
+
+    if (std::filesystem::exists(targetPath)) {
+        this->_renameDialog->setError("A file with this name already exists");
+        return false;
+    }
+    try {
+        std::filesystem::rename(sourcePath, targetPath);
+    } catch (const std::exception& e) {
+        this->_renameDialog->setError(e.what());
+        return false;
+    }
+
+    this->_renameDialog->close();
+    closedir(this->_dir);
+    this->getEntries();
+    return true;
+}
+
 bool fe::FileExplorer::handleSortClick(const sf::Vector2f& mousePos)
 {
     const std::array<std::pair<SortType, bool>, 4> actions = {{
@@ -226,6 +325,27 @@ bool fe::FileExplorer::handleSortClick(const sf::Vector2f& mousePos)
     return true;
 }
 
+bool fe::FileExplorer::handleContextMenuClick(const sf::Vector2f& mousePos)
+{
+    if (!this->_contextMenuOpen)
+        return false;
+    for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++) {
+        if (!this->_contextMenuButtons[i]->getGlobalBounds().contains(mousePos))
+            continue;
+        if (i == 0) {
+            this->openRenameDialog();
+            return true;
+        }
+        std::cout << "[DEBUG] " << CONTEXT_MENU_LABELS[i] << " clicked for " << this->_contextMenuTarget << std::endl;
+        this->_contextMenuOpen = false;
+        return true;
+    }
+    if (this->isPointInsideContextMenu(mousePos))
+        return true;
+    this->_contextMenuOpen = false;
+    return true;
+}
+
 bool fe::FileExplorer::handleEvents(std::ifstream& res)
 {
     sf::Event event;
@@ -235,6 +355,15 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
             this->_window->close();
             return true;
         }
+        switch (this->_renameDialog->handleEvent(event)) {
+            case fe::RenameDialog::EventResult::Submit:
+                this->submitRename();
+                continue;
+            case fe::RenameDialog::EventResult::Consumed:
+                continue;
+            case fe::RenameDialog::EventResult::Ignored:
+                break;
+        }
 
         // Mouse Button
         if (event.type == sf::Event::MouseButtonPressed)
@@ -243,6 +372,8 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
                     sf::Vector2i(event.mouseButton.x, event.mouseButton.y)
                 );
 
+                if (this->handleContextMenuClick(mousePos))
+                    continue;
                 if (this->handleSortClick(mousePos))
                     continue;
                 for (std::size_t i = 0; i < this->_entries.size(); i++)
@@ -268,6 +399,27 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
                         return false;
                     }
                 }
+            }
+            if (event.mouseButton.button == sf::Mouse::Right) {
+                const sf::Vector2f mousePos = this->_window->mapPixelToCoords(sf::Vector2i(event.mouseButton.x, event.mouseButton.y));
+                int entryIndex = -1;
+
+                for (std::size_t i = 0; i < this->_entries.size(); i++) {
+                    if (!this->_entries[i]->getHover())
+                        continue;
+                    entryIndex = static_cast<int>(i);
+                    break;
+                }
+
+                this->_sortMenuOpen = false;
+                if (entryIndex < 0) {
+                    this->_contextMenuOpen = false;
+                    continue;
+                }
+                this->_contextMenuTarget = this->_entries[entryIndex]->getFileName();
+                this->refreshContextMenuLayout(mousePos);
+                this->_contextMenuOpen = true;
+                continue;
             }
 
         // Mouse Wheel
@@ -333,21 +485,34 @@ void fe::FileExplorer::display()
                 *this->_window
             );
     }
+    if (this->_contextMenuOpen) {
+        this->_window->draw(*this->_contextMenuRect);
+        for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++)
+            this->_contextMenuButtons[i]->draw(
+                sf::Vector2f(this->_contextMenuButtons[i]->getGlobalBounds().left, this->_contextMenuButtons[i]->getGlobalBounds().top),
+                *this->_window
+            );
+    }
+    this->_renameDialog->draw(*this->_window);
 
     this->_window->display();
 }
 
 void fe::FileExplorer::update()
 {
+    if (this->_renameDialog->isOpen())
+        return;
     for (size_t i = 0; i < this->_entries.size(); i++)
         this->_entries[i]->update(*this->_window);
     for (size_t i = 0; i < this->_pwdButtons.size(); i++)
         this->_pwdButtons[i]->update(*this->_window);
     this->_sortButton->update(*this->_window);
-    if (!this->_sortMenuOpen)
-        return;
-    for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++)
-        this->_sortMenuButtons[i]->update(*this->_window);
+    if (this->_sortMenuOpen)
+        for (std::size_t i = 0; i < this->_sortMenuButtons.size(); i++)
+            this->_sortMenuButtons[i]->update(*this->_window);
+    if (this->_contextMenuOpen)
+        for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++)
+            this->_contextMenuButtons[i]->update(*this->_window);
 }
 
 std::ifstream fe::FileExplorer::open()

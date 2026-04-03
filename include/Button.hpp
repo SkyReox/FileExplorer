@@ -26,6 +26,7 @@ namespace fe {
             virtual void draw(sf::Vector2f pos, sf::RenderWindow& window) override;
 
             bool getHover() const noexcept;
+            sf::FloatRect getGlobalBounds() const noexcept;
     };
 }
 
