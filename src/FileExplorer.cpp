@@ -91,6 +91,7 @@ void fe::FileExplorer::init()
     this->_pwdBarRect->setPosition(sf::Vector2f(PWD_OFFSET, 5));
     this->initSortControls();
     this->initContextMenu();
+    this->initPasteMenu();
     this->_renameDialog = std::make_unique<fe::RenameDialog>(*this->_font);
 
     this->getEntries();
@@ -132,11 +133,16 @@ void fe::FileExplorer::initContextMenu()
     this->_contextMenuRect->setOutlineThickness(1);
 
     for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++)
-        this->_contextMenuButtons[i] = std::make_unique<TextButton>(
-            CONTEXT_MENU_LABELS[i],
-            *this->_font,
-            sf::Vector2f(170, SORT_BUTTON_HEIGHT)
-        );
+        this->_contextMenuButtons[i] = std::make_unique<TextButton>(CONTEXT_MENU_LABELS[i], *this->_font, sf::Vector2f(170, SORT_BUTTON_HEIGHT));
+}
+
+void fe::FileExplorer::initPasteMenu()
+{
+    this->_pasteMenuRect = std::make_unique<RoundedRectangleShape>(sf::Vector2f(CONTEXT_MENU_WIDTH, 56.f), 10, 8);
+    this->_pasteMenuRect->setFillColor(sf::Color(65, 65, 65));
+    this->_pasteMenuRect->setOutlineColor(sf::Color(100, 100, 100));
+    this->_pasteMenuRect->setOutlineThickness(1);
+    this->_pasteMenuButton = std::make_unique<TextButton>("Paste", *this->_font, sf::Vector2f(170, SORT_BUTTON_HEIGHT));
 }
 
 void fe::FileExplorer::refreshSortLayout()
@@ -172,6 +178,25 @@ void fe::FileExplorer::refreshContextMenuLayout(const sf::Vector2f& mousePos)
     this->_contextMenuRect->setPosition(menuPos);
     for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++)
         this->_contextMenuButtons[i]->setPosition(sf::Vector2f(menuPos.x + 10.f, menuPos.y + 10.f + i * 36.f));
+}
+
+void fe::FileExplorer::refreshPasteMenuLayout(const sf::Vector2f& mousePos)
+{
+    sf::Vector2f menuPos = mousePos;
+    const sf::Vector2u windowSize = this->_window->getSize();
+    const sf::FloatRect menuBounds = this->_pasteMenuRect->getGlobalBounds();
+
+    if (menuPos.x + menuBounds.width > static_cast<float>(windowSize.x))
+        menuPos.x = static_cast<float>(windowSize.x) - menuBounds.width - 5.f;
+    if (menuPos.y + menuBounds.height > static_cast<float>(windowSize.y))
+        menuPos.y = static_cast<float>(windowSize.y) - menuBounds.height - 5.f;
+    if (menuPos.x < 0.f)
+        menuPos.x = 0.f;
+    if (menuPos.y < 0.f)
+        menuPos.y = 0.f;
+
+    this->_pasteMenuRect->setPosition(menuPos);
+    this->_pasteMenuButton->setPosition(sf::Vector2f(menuPos.x + 10.f, menuPos.y + 10.f));
 }
 
 void fe::FileExplorer::getEntries()
@@ -282,9 +307,27 @@ bool fe::FileExplorer::isPointInsideContextMenu(const sf::Vector2f& mousePos) co
     return this->_contextMenuRect->getGlobalBounds().contains(mousePos);
 }
 
+bool fe::FileExplorer::isPointInsidePasteMenu(const sf::Vector2f& mousePos) const
+{
+    if (!this->_pasteMenuOpen)
+        return false;
+    return this->_pasteMenuRect->getGlobalBounds().contains(mousePos);
+}
+
+bool fe::FileExplorer::isInPwdArea(const sf::Vector2f& mousePos) const
+{
+    return mousePos.y < this->_pwdRect->getGlobalBounds().height;
+}
+
 void fe::FileExplorer::openRenameDialog()
 {
     this->_renameDialog->open(this->_contextMenuTarget);
+    this->_contextMenuOpen = false;
+}
+
+void fe::FileExplorer::copyContextMenuTarget()
+{
+    this->_copiedPath = std::filesystem::path(this->_dirPath) / this->_contextMenuTarget;
     this->_contextMenuOpen = false;
 }
 
@@ -350,14 +393,14 @@ bool fe::FileExplorer::moveTargetToTrash()
             infoPath = trashInfoDir / (trashedFileName.string() + ".trashinfo");
         }
 
-        std::ofstream infoFile(infoPath);
+        std::ofstream trashInfoFile(infoPath);
 
-        if (!infoFile.is_open())
+        if (!trashInfoFile.is_open())
             throw std::runtime_error("Couldn't create trash metadata file");
-        infoFile << "[Trash Info]\n";
-        infoFile << "Path=" << encodeTrashPath(sourcePath) << "\n";
-        infoFile << "DeletionDate=" << deletionDate << "\n";
-        infoFile.close();
+        trashInfoFile << "[Trash Info]\n";
+        trashInfoFile << "Path=" << encodeTrashPath(sourcePath) << "\n";
+        trashInfoFile << "DeletionDate=" << deletionDate << "\n";
+        trashInfoFile.close();
 
         std::filesystem::rename(sourcePath, targetPath);
     } catch (const std::exception& e) {
@@ -368,6 +411,46 @@ bool fe::FileExplorer::moveTargetToTrash()
     }
 
     this->_contextMenuOpen = false;
+    closedir(this->_dir);
+    this->getEntries();
+    return true;
+}
+
+std::filesystem::path fe::FileExplorer::getAvailablePastePath(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir) const
+{
+    std::filesystem::path targetPath = destinationDir / sourcePath.filename();
+
+    if (!std::filesystem::exists(targetPath))
+        return targetPath;
+    for (std::size_t i = 2; true; i++) {
+        const std::filesystem::path candidatePath = destinationDir / (sourcePath.filename().string() + "." + std::to_string(i));
+
+        if (!std::filesystem::exists(candidatePath))
+            return candidatePath;
+    }
+}
+
+bool fe::FileExplorer::pasteCopiedEntry()
+{
+    if (this->_copiedPath.empty() || !std::filesystem::exists(this->_copiedPath)) {
+        this->_pasteMenuOpen = false;
+        return false;
+    }
+
+    const std::filesystem::path destinationDir = this->_dirPath;
+    const std::filesystem::path targetPath = this->getAvailablePastePath(this->_copiedPath, destinationDir);
+    try {
+        if (std::filesystem::is_directory(this->_copiedPath))
+            std::filesystem::copy(this->_copiedPath, targetPath, std::filesystem::copy_options::recursive);
+        else
+            std::filesystem::copy_file(this->_copiedPath, targetPath);
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to paste '" << this->_copiedPath.filename().string() << "': " << e.what() << std::endl;
+        this->_pasteMenuOpen = false;
+        return false;
+    }
+
+    this->_pasteMenuOpen = false;
     closedir(this->_dir);
     this->getEntries();
     return true;
@@ -410,12 +493,16 @@ bool fe::FileExplorer::handleContextMenuClick(const sf::Vector2f& mousePos)
     for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++) {
         if (!this->_contextMenuButtons[i]->getGlobalBounds().contains(mousePos))
             continue;
-        if (i == 0) {
-            this->openRenameDialog();
-            return true;
+        switch (i) {
+            case 0:
+                this->openRenameDialog();
+                return true;
+            case 1:
+                this->copyContextMenuTarget();
+                return true;
+            case 3:
+                return this->moveTargetToTrash();
         }
-        if (i == 3)
-            return this->moveTargetToTrash();
         std::cout << "[DEBUG] " << CONTEXT_MENU_LABELS[i] << " clicked for " << this->_contextMenuTarget << std::endl;
         this->_contextMenuOpen = false;
         return true;
@@ -423,6 +510,20 @@ bool fe::FileExplorer::handleContextMenuClick(const sf::Vector2f& mousePos)
     if (this->isPointInsideContextMenu(mousePos))
         return true;
     this->_contextMenuOpen = false;
+    return true;
+}
+
+bool fe::FileExplorer::handlePasteMenuClick(const sf::Vector2f& mousePos)
+{
+    if (!this->_pasteMenuOpen)
+        return false;
+    if (this->_pasteMenuButton->getGlobalBounds().contains(mousePos)) {
+        this->pasteCopiedEntry();
+        return true;
+    }
+    if (this->isPointInsidePasteMenu(mousePos))
+        return true;
+    this->_pasteMenuOpen = false;
     return true;
 }
 
@@ -453,6 +554,8 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
                 );
 
                 if (this->handleContextMenuClick(mousePos))
+                    continue;
+                if (this->handlePasteMenuClick(mousePos))
                     continue;
                 if (this->handleSortClick(mousePos))
                     continue;
@@ -492,8 +595,13 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
                 }
 
                 this->_sortMenuOpen = false;
+                this->_pasteMenuOpen = false;
                 if (entryIndex < 0) {
                     this->_contextMenuOpen = false;
+                    if (this->isInPwdArea(mousePos))
+                        continue;
+                    this->refreshPasteMenuLayout(mousePos);
+                    this->_pasteMenuOpen = true;
                     continue;
                 }
                 this->_contextMenuTarget = this->_entries[entryIndex]->getFileName();
@@ -573,6 +681,13 @@ void fe::FileExplorer::display()
                 *this->_window
             );
     }
+    if (this->_pasteMenuOpen) {
+        this->_window->draw(*this->_pasteMenuRect);
+        this->_pasteMenuButton->draw(
+            sf::Vector2f(this->_pasteMenuButton->getGlobalBounds().left, this->_pasteMenuButton->getGlobalBounds().top),
+            *this->_window
+        );
+    }
     this->_renameDialog->draw(*this->_window);
 
     this->_window->display();
@@ -593,6 +708,8 @@ void fe::FileExplorer::update()
     if (this->_contextMenuOpen)
         for (std::size_t i = 0; i < this->_contextMenuButtons.size(); i++)
             this->_contextMenuButtons[i]->update(*this->_window);
+    if (this->_pasteMenuOpen)
+        this->_pasteMenuButton->update(*this->_window);
 }
 
 std::ifstream fe::FileExplorer::open()

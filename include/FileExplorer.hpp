@@ -17,6 +17,7 @@
 #include "TextButton.hpp"
 #include <array>
 #include <dirent.h>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -52,6 +53,10 @@ namespace fe
         std::unique_ptr<RoundedRectangleShape> _contextMenuRect;
         bool _contextMenuOpen = false;
         std::string _contextMenuTarget;
+        std::unique_ptr<TextButton> _pasteMenuButton;
+        std::unique_ptr<RoundedRectangleShape> _pasteMenuRect;
+        bool _pasteMenuOpen = false;
+        std::filesystem::path _copiedPath;
         std::unique_ptr<RenameDialog> _renameDialog;
 
         void init();
@@ -61,15 +66,23 @@ namespace fe
         void display();
         void initSortControls();
         void initContextMenu();
+        void initPasteMenu();
         void refreshSortLayout();
         void refreshContextMenuLayout(const sf::Vector2f& mousePos);
+        void refreshPasteMenuLayout(const sf::Vector2f& mousePos);
         bool handleSortClick(const sf::Vector2f& mouseWorld);
         bool handleContextMenuClick(const sf::Vector2f& mousePos);
+        bool handlePasteMenuClick(const sf::Vector2f& mousePos);
         bool isPointInsideSortMenu(const sf::Vector2f& mouseWorld) const;
         bool isPointInsideContextMenu(const sf::Vector2f& mousePos) const;
+        bool isPointInsidePasteMenu(const sf::Vector2f& mousePos) const;
+        bool isInPwdArea(const sf::Vector2f& mousePos) const;
         void openRenameDialog();
+        void copyContextMenuTarget();
         bool submitRename();
         bool moveTargetToTrash();
+        bool pasteCopiedEntry();
+        std::filesystem::path getAvailablePastePath(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir) const;
 
         public:
             enum SortType {
