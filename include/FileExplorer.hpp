@@ -12,6 +12,7 @@
 #include "constants.hpp"
 #include "DirButton.hpp"
 #include "FileBar.hpp"
+#include "PropertiesDialog.hpp"
 #include "RenameDialog.hpp"
 #include "RoundedRectangleShape.hpp"
 #include "TextButton.hpp"
@@ -59,6 +60,7 @@ namespace fe
         std::filesystem::path _copiedPath;
         bool _cutPending = false;
         std::unique_ptr<RenameDialog> _renameDialog;
+        std::unique_ptr<PropertiesDialog> _propertiesDialog;
 
         void init();
         void getEntries();
@@ -79,6 +81,7 @@ namespace fe
         bool isPointInsidePasteMenu(const sf::Vector2f& mousePos) const;
         bool isInPwdArea(const sf::Vector2f& mousePos) const;
         void openRenameDialog();
+        void openPropertiesDialog();
         void copyContextMenuTarget();
         void cutContextMenuTarget();
         bool submitRename();

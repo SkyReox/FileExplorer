@@ -9,6 +9,7 @@ SRC =	src/FileExplorer.cpp			\
 		src/FileBar.cpp					\
 		src/RoundedRectangleShape.cpp	\
 		src/RenameDialog.cpp			\
+		src/PropertiesDialog.cpp		\
 		src/Button.cpp					\
 		src/DirButton.cpp				\
 		src/TextButton.cpp				\

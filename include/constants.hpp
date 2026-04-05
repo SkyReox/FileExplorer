@@ -37,4 +37,7 @@
     #define RENAME_DIALOG_HEIGHT 170.f
     #define RENAME_INPUT_HEIGHT 42.f
 
+    #define PROPERTIES_DIALOG_WIDTH 520.f
+    #define PROPERTIES_DIALOG_HEIGHT 250.f
+
 #endif /* CONSTANTS_HPP_ */

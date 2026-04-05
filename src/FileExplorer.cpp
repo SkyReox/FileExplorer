@@ -14,10 +14,12 @@
 #include <dirent.h>
 #include <exception>
 #include <filesystem>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 namespace {
@@ -56,6 +58,68 @@ namespace {
         stream << std::put_time(localTime, "%Y-%m-%dT%H:%M:%S");
         return stream.str();
     }
+
+    std::string formatTimestamp(std::time_t timestamp)
+    {
+        const std::tm* localTime = std::localtime(&timestamp);
+        std::ostringstream stream;
+
+        if (!localTime)
+            return "Unavailable";
+        stream << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
+        return stream.str();
+    }
+
+    std::string formatFileTime(std::filesystem::file_time_type fileTime)
+    {
+        const auto timePoint = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+            fileTime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+        );
+
+        return formatTimestamp(std::chrono::system_clock::to_time_t(timePoint));
+    }
+
+    std::uintmax_t getEntrySize(const std::filesystem::path& path)
+    {
+        std::error_code errorCode;
+
+        if (std::filesystem::is_regular_file(path, errorCode))
+            return std::filesystem::file_size(path, errorCode);
+        if (!std::filesystem::is_directory(path, errorCode))
+            return 0;
+
+        std::uintmax_t totalSize = 0;
+        const auto options = std::filesystem::directory_options::skip_permission_denied;
+
+        for (std::filesystem::recursive_directory_iterator it(path, options, errorCode), end; it != end; it.increment(errorCode)) {
+            if (errorCode) {
+                errorCode.clear();
+                continue;
+            }
+            if (!it->is_regular_file(errorCode)) {
+                errorCode.clear();
+                continue;
+            }
+            totalSize += it->file_size(errorCode);
+            errorCode.clear();
+        }
+        return totalSize;
+    }
+
+    std::string formatEntrySize(const std::filesystem::path& path)
+    {
+        return std::to_string(getEntrySize(path)) + " bytes";
+    }
+
+    std::string getCreationDate(const std::filesystem::path& path)
+    {
+        struct statx fileInfo;
+
+        if (statx(AT_FDCWD, path.c_str(), AT_SYMLINK_NOFOLLOW, STATX_BTIME, &fileInfo) == 0 &&
+            (fileInfo.stx_mask & STATX_BTIME) != 0)
+            return formatTimestamp(fileInfo.stx_btime.tv_sec);
+        return "Unavailable";
+    }
 }
 
 fe::FileExplorer::FileExplorer(std::string windowName) : _windowName(windowName)
@@ -93,6 +157,7 @@ void fe::FileExplorer::init()
     this->initContextMenu();
     this->initPasteMenu();
     this->_renameDialog = std::make_unique<fe::RenameDialog>(*this->_font);
+    this->_propertiesDialog = std::make_unique<fe::PropertiesDialog>(*this->_font);
 
     this->getEntries();
 }
@@ -325,6 +390,21 @@ void fe::FileExplorer::openRenameDialog()
     this->_contextMenuOpen = false;
 }
 
+void fe::FileExplorer::openPropertiesDialog()
+{
+    const std::filesystem::path targetPath = std::filesystem::path(this->_dirPath) / this->_contextMenuTarget;
+    const bool isDirectory = std::filesystem::is_directory(targetPath);
+    const std::array<std::string, 4> properties = {{
+        "Name: " + this->_contextMenuTarget + (isDirectory ? "/" : ""),
+        "Size: " + formatEntrySize(targetPath),
+        "Last modification: " + formatFileTime(std::filesystem::last_write_time(targetPath)),
+        "Creation: " + getCreationDate(targetPath)
+    }};
+
+    this->_propertiesDialog->open(properties);
+    this->_contextMenuOpen = false;
+}
+
 void fe::FileExplorer::copyContextMenuTarget()
 {
     this->_copiedPath = std::filesystem::path(this->_dirPath) / this->_contextMenuTarget;
@@ -525,6 +605,9 @@ bool fe::FileExplorer::handleContextMenuClick(const sf::Vector2f& mousePos)
                 return true;
             case 3:
                 return this->moveTargetToTrash();
+            case 4:
+                this->openPropertiesDialog();
+                return true;
         }
         std::cout << "[DEBUG] " << CONTEXT_MENU_LABELS[i] << " clicked for " << this->_contextMenuTarget << std::endl;
         this->_contextMenuOpen = false;
@@ -566,6 +649,12 @@ bool fe::FileExplorer::handleEvents(std::ifstream& res)
             case fe::RenameDialog::EventResult::Consumed:
                 continue;
             case fe::RenameDialog::EventResult::Ignored:
+                break;
+        }
+        switch (this->_propertiesDialog->handleEvent(event)) {
+            case fe::PropertiesDialog::EventResult::Consumed:
+                continue;
+            case fe::PropertiesDialog::EventResult::Ignored:
                 break;
         }
 
@@ -712,13 +801,14 @@ void fe::FileExplorer::display()
         );
     }
     this->_renameDialog->draw(*this->_window);
+    this->_propertiesDialog->draw(*this->_window);
 
     this->_window->display();
 }
 
 void fe::FileExplorer::update()
 {
-    if (this->_renameDialog->isOpen())
+    if (this->_renameDialog->isOpen() || this->_propertiesDialog->isOpen())
         return;
     for (size_t i = 0; i < this->_entries.size(); i++)
         this->_entries[i]->update(*this->_window);
