@@ -57,6 +57,7 @@ namespace fe
         std::unique_ptr<RoundedRectangleShape> _pasteMenuRect;
         bool _pasteMenuOpen = false;
         std::filesystem::path _copiedPath;
+        bool _cutPending = false;
         std::unique_ptr<RenameDialog> _renameDialog;
 
         void init();
@@ -79,6 +80,7 @@ namespace fe
         bool isInPwdArea(const sf::Vector2f& mousePos) const;
         void openRenameDialog();
         void copyContextMenuTarget();
+        void cutContextMenuTarget();
         bool submitRename();
         bool moveTargetToTrash();
         bool pasteCopiedEntry();

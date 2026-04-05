@@ -328,6 +328,14 @@ void fe::FileExplorer::openRenameDialog()
 void fe::FileExplorer::copyContextMenuTarget()
 {
     this->_copiedPath = std::filesystem::path(this->_dirPath) / this->_contextMenuTarget;
+    this->_cutPending = false;
+    this->_contextMenuOpen = false;
+}
+
+void fe::FileExplorer::cutContextMenuTarget()
+{
+    this->_copiedPath = std::filesystem::path(this->_dirPath) / this->_contextMenuTarget;
+    this->_cutPending = true;
     this->_contextMenuOpen = false;
 }
 
@@ -434,13 +442,22 @@ bool fe::FileExplorer::pasteCopiedEntry()
 {
     if (this->_copiedPath.empty() || !std::filesystem::exists(this->_copiedPath)) {
         this->_pasteMenuOpen = false;
+        this->_cutPending = false;
         return false;
     }
 
     const std::filesystem::path destinationDir = this->_dirPath;
+
+    if (this->_cutPending && this->_copiedPath.parent_path() == destinationDir) {
+        this->_pasteMenuOpen = false;
+        return false;
+    }
+
     const std::filesystem::path targetPath = this->getAvailablePastePath(this->_copiedPath, destinationDir);
     try {
-        if (std::filesystem::is_directory(this->_copiedPath))
+        if (this->_cutPending)
+            std::filesystem::rename(this->_copiedPath, targetPath);
+        else if (std::filesystem::is_directory(this->_copiedPath))
             std::filesystem::copy(this->_copiedPath, targetPath, std::filesystem::copy_options::recursive);
         else
             std::filesystem::copy_file(this->_copiedPath, targetPath);
@@ -451,6 +468,9 @@ bool fe::FileExplorer::pasteCopiedEntry()
     }
 
     this->_pasteMenuOpen = false;
+    if (this->_cutPending)
+        this->_copiedPath.clear();
+    this->_cutPending = false;
     closedir(this->_dir);
     this->getEntries();
     return true;
@@ -499,6 +519,9 @@ bool fe::FileExplorer::handleContextMenuClick(const sf::Vector2f& mousePos)
                 return true;
             case 1:
                 this->copyContextMenuTarget();
+                return true;
+            case 2:
+                this->cutContextMenuTarget();
                 return true;
             case 3:
                 return this->moveTargetToTrash();
